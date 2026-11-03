@@ -5,7 +5,8 @@ const {chromium}=require('playwright');
 
 test('fishing rule switch saves, reloads and fits supported sizes and DPI',async()=>{
  let enabled='0',failRead=false,failWrite=false,writes=0;
- const html=fs.readFileSync(path.join(__dirname,'web/index.html'));
+ const WEB_DIR=path.join(__dirname,'web');
+ const CONTENT_TYPES={'.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.html':'text/html; charset=utf-8'};
  const server=http.createServer((req,res)=>{
   const url=new URL(req.url,'http://fixture'),key=url.pathname.replace(/^\/admin/,'');
   const json=(value,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value));};
@@ -20,7 +21,13 @@ test('fishing rule switch saves, reloads and fits supported sizes and DPI',async
    });return;
   }
   if(key.startsWith('/api/'))return json({});
-  res.setHeader('Content-Type','text/html; charset=utf-8');res.end(html);
+  if(key!=='/'&&key!==''){
+   const rel=key.replace(/^\//,''),file=path.join(WEB_DIR,rel);
+   if(file.startsWith(WEB_DIR)&&fs.existsSync(file)&&fs.statSync(file).isFile()){
+    res.setHeader('Content-Type',CONTENT_TYPES[path.extname(file)]||'application/octet-stream');return res.end(fs.readFileSync(file));
+   }
+  }
+  res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fs.readFileSync(path.join(WEB_DIR,'index.html')));
  });
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const browser=await chromium.launch({headless:true,executablePath:process.env.RF4_TEST_BROWSER||path.join(process.env['ProgramFiles(x86)'],'Microsoft/Edge/Application/msedge.exe')});
