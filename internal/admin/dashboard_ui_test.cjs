@@ -1,7 +1,14 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {chromium}=require('playwright');
-const html=fs.readFileSync(path.join(__dirname,'web/index.html'),'utf8');
+const WEB_DIR=path.join(__dirname,'web');
+const html=fs.readFileSync(path.join(WEB_DIR,'index.html'),'utf8');
+const CONTENT_TYPES={'.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.html':'text/html; charset=utf-8'};
+function readStatic(rel){
+ const file=path.join(WEB_DIR,rel);
+ if(!file.startsWith(WEB_DIR)||!fs.existsSync(file)||!fs.statSync(file).isFile())return null;
+ return {body:fs.readFileSync(file),type:CONTENT_TYPES[path.extname(file)]||'application/octet-stream'};
+}
 test('grouped dashboard preserves edits and upstream embedded API routing',async()=>{
  const browser=await chromium.launch({headless:true,executablePath:process.env.RF4_TEST_BROWSER||path.join(process.env['ProgramFiles(x86)'],'Microsoft/Edge/Application/msedge.exe')});
  const metrics=[];
@@ -13,7 +20,11 @@ test('grouped dashboard preserves edits and upstream embedded API routing',async
    await page.route('**/*',route=>{
     const url=new URL(route.request().url());requests.push(url.pathname);
     if(url.pathname===prefix+'/')return route.fulfill({contentType:'text/html; charset=utf-8',body:html});
-    assert.ok(url.pathname.startsWith(prefix+'/api/'),url.pathname);
+    if(!url.pathname.startsWith(prefix+'/api/')){
+     const asset=readStatic(url.pathname.slice(prefix.length+1));
+     assert.ok(asset,'unexpected request '+url.pathname);
+     return route.fulfill({contentType:asset.type,body:asset.body});
+    }
     const key=url.pathname.slice(prefix.length),data=key==='/api/me'?{username:'admin'}:key==='/api/tunables'?{xp_gain:'1'}:{sessions:1,players:1,items:1,mails:0,tunables:1,audits:0};
     return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
    });
