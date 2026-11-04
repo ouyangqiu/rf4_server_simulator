@@ -1,22 +1,28 @@
 // ---- 鱼口控制 ----
 let FISH_AREAS=[];
-let FISH_RULES_ENABLED=null;
+const FISH_RULE_SWITCHES={
+  distribution:{key:'fish_distribution_enabled',prefix:'fishDistribution',enabled:null,on:'按地图鱼种、所在区域和游戏昼夜变化鱼口，每四个游戏小时重新分布。',off:'沿用现有分布，各处水域可出鱼，不增加点位限制。'},
+  bait:{key:'fish_bait_rules_enabled',prefix:'fishRules',enabled:null,on:'根据钩上饵料筛选鱼种。',off:'沿用现有吃饵逻辑，不增加吃饵限制。'}
+};
 async function loadFishRules(){
-  const button=$('#fishRulesToggle');button.disabled=true;
+  for(const x of Object.values(FISH_RULE_SWITCHES))$('#'+x.prefix+'Toggle').disabled=true;
   try{
-    const values=await api('/api/tunables');FISH_RULES_ENABLED=values.fish_bait_rules_enabled==='1';
-    $('#fishRulesBadge').textContent=FISH_RULES_ENABLED?'已开启':'已关闭';
-    button.textContent=FISH_RULES_ENABLED?'关闭新逻辑':'开启新逻辑';button.setAttribute('aria-pressed',String(FISH_RULES_ENABLED));button.disabled=false;
-    $('#fishRulesMessage').textContent=FISH_RULES_ENABLED?'当前按新规则筛选；上鱼概率和调试预设不能放行不匹配的鱼。':'当前使用旧判鱼流程，饵料主要调整出鱼概率。';
-  }catch(e){FISH_RULES_ENABLED=null;$('#fishRulesBadge').textContent='读取失败';$('#fishRulesMessage').textContent=e.message;button.textContent='暂不可用';}
+    const values=await api('/api/tunables');
+    for(const x of Object.values(FISH_RULE_SWITCHES)){
+      x.enabled=values[x.key]==='1';
+      $('#'+x.prefix+'Badge').textContent=x.enabled?'已开启':'已关闭';
+      const button=$('#'+x.prefix+'Toggle');button.textContent=x.enabled?'关闭':'开启';button.setAttribute('aria-pressed',String(x.enabled));button.disabled=false;
+      $('#'+x.prefix+'Message').textContent=x.enabled?x.on:x.off;
+    }
+  }catch(e){for(const x of Object.values(FISH_RULE_SWITCHES)){x.enabled=null;$('#'+x.prefix+'Badge').textContent='读取失败';$('#'+x.prefix+'Message').textContent=e.message;$('#'+x.prefix+'Toggle').textContent='暂不可用';}}
 }
-async function toggleFishRules(){
-  if(FISH_RULES_ENABLED===null)return;
-  const button=$('#fishRulesToggle');button.disabled=true;
+async function toggleFishRules(kind){
+  const x=FISH_RULE_SWITCHES[kind];if(!x||x.enabled===null)return;
+  for(const item of Object.values(FISH_RULE_SWITCHES))$('#'+item.prefix+'Toggle').disabled=true;
   try{
-    await api('/api/tunables',{method:'POST',body:JSON.stringify({key:'fish_bait_rules_enabled',value:FISH_RULES_ENABLED?'0':'1'})});
+    await api('/api/tunables',{method:'POST',body:JSON.stringify({key:x.key,value:x.enabled?'0':'1'})});
     await loadFishRules();toast('已保存，最多 30 秒影响后续判鱼');
-  }catch(e){toast(e.message,'bad');button.disabled=false;}
+  }catch(e){toast(e.message,'bad');for(const item of Object.values(FISH_RULE_SWITCHES))$('#'+item.prefix+'Toggle').disabled=item.enabled===null;}
 }
 async function loadFishAreas(){
   await loadFishRules();
